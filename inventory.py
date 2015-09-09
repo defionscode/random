@@ -21,6 +21,7 @@ except KeyError:
 
 
 groups_list = set()
+meta_groups = set()
 
 final_inventory = dict(
     _meta = dict(hostvars = dict() )
@@ -79,9 +80,9 @@ def establish_groups_and_hostvars():
                             for group_name in value.split(';'):
                                 if group_name:
                                     if group_name.endswith(';'):
-                                        group_name.add(group_name[:-1])
+                                        meta_groups.add(group_name[:-1])
                                     else:
-                                        groups_list.add(group_name)
+                                        meta_groups.add(group_name)
                         elif len(value.split('=')) > 1:
                             hkey, hvar = value.split('=')
                             final_inventory['_meta']['hostvars'][hostname][hkey] = hvar
@@ -98,6 +99,8 @@ def make_groups():
                 final_inventory[group] = dict(hosts=list())
         except ValueError:
             pass
+    for group in meta_groups:
+        final_inventory[group] = dict(hosts=list())
 
 def set_group_memberships():
     for itam_host_line in inv_list:
@@ -118,6 +121,16 @@ def set_group_memberships():
                     if group == zone + '_zones' and zone != '' and group.split('_zones')[0] in itam_host_line:
                         final_inventory[group]['hosts'].append(hostname)
                         final_inventory['_meta']['hostvars'][hostname]['Membership'].append(group)
+
+                for group in meta_groups:
+                    if group in itam_host_line:
+                        final_inventory[group]['hosts'].append(hostname)
+                        try:
+                            final_inventory['_meta']['hostvars'][hostname]['Membership'].append(group)
+                        except KeyError, badhost:
+                            if len(itam_host_line.split(',')) > 12:
+                                sys.exit("It seems %s has one or more commas in one of the ITAM fields, please check, fix, and try again" % badhost)
+
 
         except ValueError:
             pass
