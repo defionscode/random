@@ -124,7 +124,7 @@ def set_group_memberships():
                         final_inventory['_meta']['hostvars'][hostname]['Membership'].append(group)
 
                 for group in meta_groups:
-                    if group in meta_str:
+                    if group in meta_str and valid_meta(meta_str):
                         final_inventory[group]['hosts'].append(hostname)
                         try:
                             final_inventory['_meta']['hostvars'][hostname]['Membership'].append(group)
@@ -140,6 +140,9 @@ def valid_meta(meta_string):
     bad_characters = [' ', ',']
 
     split_qty = len(meta_string.split('|'))
+
+    if not '=' in meta_string:
+        return False
 
     if any(char in meta_string for char in bad_characters):
         return False
