@@ -107,6 +107,7 @@ def set_group_memberships():
         try:
             hostname, zone = itam_host_line.split(',')[:2]
             Env = itam_host_line.split(',')[3]
+            meta_str = itam_host_line.split(',')[5]
 
             if Env in env_mappings[import_env]:
                 for group in groups_list:
@@ -123,7 +124,7 @@ def set_group_memberships():
                         final_inventory['_meta']['hostvars'][hostname]['Membership'].append(group)
 
                 for group in meta_groups:
-                    if group in itam_host_line:
+                    if group in meta_str:
                         final_inventory[group]['hosts'].append(hostname)
                         try:
                             final_inventory['_meta']['hostvars'][hostname]['Membership'].append(group)
