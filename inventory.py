@@ -137,11 +137,14 @@ def set_group_memberships():
             pass
 
 def valid_meta(meta_string):
-    bad_characters = [' ', ',']
+    bad_characters = [',']
 
     split_qty = len(meta_string.split('|'))
 
     if not '=' in meta_string:
+        return False
+
+    if meta_string.startswith(' ') or meta_string.endswith(' '):
         return False
 
     if any(char in meta_string for char in bad_characters):
