@@ -1,80 +1,104 @@
 #!/usr/bin/env python
+'''
+This is the dynamic inventory script used for ITAM integration. It is smart
+in that it uses a variety of logic to create proper groupings for Ansible
+inventory to be used in Tower. In addition it supports the use of a meta-field
+which permits the arbitrary creation of additional groups and additional
+host_vars.
 
-import subprocess
-import json
-import os
-import sys
+Example ITAM string:
+"redacted_hostname,,RedHat Linux,Development,CBS,groups=Apache;T24;|webtype=reverse proxy;,,VMware Virtual Server,VMware-42 05 ,2015-05-19,,Available"
 
+The meta field from the above string:
+"groups=Apache;T24;|webtype=reverse proxy;"
+
+This would create an inventory group 'Apache' and add the host to it. In
+addition it would also add 'webtype' as a host_var to the host which would
+allow for its use in a playbook/templates/etc
+
+'''
+
+import subprocess, json, os, sys, re
 
 try:
-    import_env = os.environ['IMPORT_ENV']
+    IMPORT_ENV = os.environ['IMPORT_ENV']
 except KeyError:
-    sys.exit('This dynamic inventory script requires the IMPORT_ENV environment variable to be set in order to run')
+    sys.exit('This dynamic inventory script requires the IMPORT_ENV'
+             ' environment variable to be set in order to run')
 
-if import_env not in ['Production', 'UAT', 'Lower']:
-    sys.exit('The environment specified: %s, is not valid, it must be one of UAT, Production, or Lower' % import_env)
+if IMPORT_ENV not in ['Production', 'UAT', 'Lower']:
+    sys.exit('The environment specified: %s, is not valid, it must be one of'
+             ' UAT, Production, or Lower' % IMPORT_ENV)
 
 try:
-    itam_path = os.environ['ITAM_PATH']
+    ITAM_PATH = os.environ['ITAM_PATH']
 except KeyError:
-    sys.exit('This dynamic inventory script requires the ITAM_PATH environment variable set to the path of the ITAM script')
+    sys.exit('This dynamic inventory script requires the ITAM_PATH'
+             ' environment variable set to the path of the ITAM script')
 
+ENV_MAPPINGS = dict(
+    Production=['Production', 'DR'],
+    UAT=['UAT'],
+    Lower=['Development', 'QA']
+)
 
 groups_list = set()
 meta_groups = set()
 
 final_inventory = dict(
-    _meta = dict(hostvars = dict() )
+    _meta=dict(hostvars=dict())
     )
 
-env_mappings = dict(
-    Production = ['Production', 'DR'],
-    UAT = ['UAT'],
-    Lower = ['Development', 'QA']
-)
 
-itam_call = subprocess.Popen([itam_path], stdout=subprocess.PIPE)
-raw_inv = itam_call.stdout.read()
-inv_list = raw_inv.split('\n')
+
+ITAM_CALL = subprocess.Popen([ITAM_PATH], stdout=subprocess.PIPE)
+RAW_INV = ITAM_CALL.stdout.read()
+INV_LIST = RAW_INV.split('\n')
 
 
 def establish_groups_and_hostvars():
-    for host in inv_list:
+    '''
+    Creates a list of groups to be created based on the ITAM strings returned
+    and establishes the initial set of host_vars.
+    '''
+
+    for host in INV_LIST:
         try:
-            hostname, Globalzone, OS, Env, Business_Unit, Meta, Description, Model, Serial, Install_Date,Chassis,Lifecycle = host.split(',')
-            if Env in env_mappings[import_env]:
+            hostname, globalzone, operating_system, env, business_unit, meta, description,\
+            model, serial, install_date, chassis, lifecycle = host.split(',')
+
+            if env in ENV_MAPPINGS[IMPORT_ENV]:
                 datacenter = ''.join(list(hostname)[:4])
                 groups_list.add(datacenter)
-                groups_list.add(Globalzone + '_zones')
-                groups_list.add(OS)
-    #            groups_list.add(Env)
-                groups_list.add(Business_Unit)
-                groups_list.add(Model)
-    #            groups_list.add(Description)
-    #            groups_list.add(Serial)
-    #            groups_list.add(Install_Date)
-                if len(Chassis.split(':')) > 1:
-                    Chassis = Chassis.split(':')[0]
-                    groups_list.add(Chassis)
-                else:
-                    groups_list.add(Chassis)
-    #            groups_list.add(Lifecycle)
+                groups_list.add(globalzone + '_zones')
+                groups_list.add(operating_system)
+                groups_list.add(business_unit)
+                groups_list.add(model)
 
-                final_inventory['_meta']['hostvars'][hostname] = dict(Globalzone=Globalzone,
-                                                                  OS=OS,
-                                                                  Env=Env,
-                                                                  Datacenter=datacenter,
-                                                                  Business_Unit=Business_Unit,
-                                                                  Description=Description,
-                                                                  Model=Model,
-                                                                  Serial=Serial,
-                                                                  Install_Date=Install_Date,
-                                                                  Chassis=Chassis,
-                                                                  Lifecycle=Lifecycle,
-                                                                  Membership=list()
-                                                              )
-                if Meta and valid_meta(Meta):
-                    for itam_meta in Meta.split('|'):
+                if len(chassis.split(':')) > 1:
+                    chassis = chassis.split(':')[0]
+                    groups_list.add(chassis)
+                else:
+                    groups_list.add(chassis)
+
+                potential_cluster = re.search(r'[a-bA-b]*$', hostname)
+                if potential_cluster is not None:
+                    groups_list.add(hostname[:-1])
+
+                final_inventory['_meta']['hostvars'][hostname] = dict(globalzone=globalzone,
+                                                                      operating_system=operating_system,
+                                                                      env=env,
+                                                                      Datacenter=datacenter,
+                                                                      business_unit=business_unit,
+                                                                      description=description,
+                                                                      model=model,
+                                                                      serial=serial,
+                                                                      install_date=install_date,
+                                                                      chassis=chassis,
+                                                                      lifecycle=lifecycle,
+                                                                      Membership=list())
+                if meta and valid_meta(meta):
+                    for itam_meta in meta.split('|'):
                         key, value = itam_meta.split('=')
                         if key.strip() == 'groups':
                             for group_name in value.split(';'):
@@ -93,6 +117,8 @@ def establish_groups_and_hostvars():
             pass
 
 def make_groups():
+    '''Creates all inventory groups'''
+
     for group in groups_list:
         try:
             if group not in ['', '_zones']:
@@ -103,42 +129,60 @@ def make_groups():
         final_inventory[group] = dict(hosts=list())
 
 def set_group_memberships():
-    for itam_host_line in inv_list:
+    ''' This assigns particular hosts to groups'''
+
+    for itam_host_line in INV_LIST:
+
         try:
             hostname, zone = itam_host_line.split(',')[:2]
-            Env = itam_host_line.split(',')[3]
+            env = itam_host_line.split(',')[3]
             meta_str = itam_host_line.split(',')[5]
 
-            if Env in env_mappings[import_env]:
+            if env in ENV_MAPPINGS[IMPORT_ENV]:
                 for group in groups_list:
                     if group in itam_host_line and group not in ['', '_zones'] and 'zones' not in group:
+
                         final_inventory[group]['hosts'].append(hostname)
+
                         try:
                             final_inventory['_meta']['hostvars'][hostname]['Membership'].append(group)
+
                         except KeyError, badhost:
                             if len(itam_host_line.split(',')) > 12:
-                                sys.exit("It seems %s has one or more commas in one of the ITAM fields, please check, fix, and try again" % badhost)
+                                sys.exit("It seems %s has one or more commas"
+                                         " in one of the ITAM fields, please"
+                                         " check, fix, and try again" % badhost)
 
                     if group == zone + '_zones' and zone != '' and group.split('_zones')[0] in itam_host_line:
                         final_inventory[group]['hosts'].append(hostname)
                         final_inventory['_meta']['hostvars'][hostname]['Membership'].append(group)
 
                 for group in meta_groups:
+
                     if group in meta_str and valid_meta(meta_str):
                         final_inventory[group]['hosts'].append(hostname)
+
                         try:
                             final_inventory['_meta']['hostvars'][hostname]['Membership'].append(group)
                         except KeyError, badhost:
+
                             if len(itam_host_line.split(',')) > 12:
-                                sys.exit("It seems %s has one or more commas in one of the ITAM fields, please check, fix, and try again" % badhost)
+                                sys.exit("It seems %s has one or more commas"
+                                         " in one of the ITAM fields, please"
+                                         " check, fix, and try again" % badhost)
 
 
         except ValueError:
             pass
 
 def valid_meta(meta_string):
-    bad_characters = [',']
+    '''
+    This is intended for the meta-field string and does some sanity checks
+    if standards are not followed then the meta-field is intentionally not
+    parsed.
+    '''
 
+    bad_characters = [',']
     split_qty = len(meta_string.split('|'))
 
     if not '=' in meta_string:
@@ -160,6 +204,7 @@ def valid_meta(meta_string):
     return True
 
 def main():
+    '''The function that calls everything else'''
     establish_groups_and_hostvars()
     make_groups()
     set_group_memberships()
