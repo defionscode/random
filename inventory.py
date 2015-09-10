@@ -157,7 +157,7 @@ def set_group_memberships():
                         final_inventory[group]['hosts'].append(hostname)
                         final_inventory['_meta']['hostvars'][hostname]['Membership'].append(group)
 
-                    elif '_cluster' in group and group.split('_cluster')[0] in itam_host_line:
+                    elif '_cluster' in group and group.split('_cluster')[0] in hostname:
                         final_inventory[group]['hosts'].append(hostname)
                         final_inventory['_meta']['hostvars'][hostname]['Membership'].append(group)
 
