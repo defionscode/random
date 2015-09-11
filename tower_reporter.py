@@ -46,9 +46,9 @@ if TOWER_ENDPOINT.endswith('/'):
 else:
     TOWER_ENDPOINT=TOWER_ENDPOINT + '/api/v1/'
 
-TOWER_USER=config.get('Auth', 'TOWER_USER')
-TOWER_PASS=config.get('Auth', 'TOWER_PASS')
-REPORT_CSV_PATH=config.get('Report', 'REPORT_CSV_PATH')
+TOWER_USER      = config.get('Auth', 'TOWER_USER')
+TOWER_PASS      = config.get('Auth', 'TOWER_PASS')
+REPORT_CSV_PATH = config.get('Report', 'REPORT_CSV_PATH')
 
 TODAY           = datetime.date.today()
 LAST_MONTH      = TODAY - datetime.timedelta(days=30)
@@ -57,18 +57,21 @@ TWO_MONTHS_AGO  = LAST_MONTH - datetime.timedelta(days=30)
 TODAY           = TODAY.strftime("%Y-%m-%d")
 LAST_MONTH      = LAST_MONTH.strftime("%Y-%m-%d")
 TWO_MONTHS_AGO  = TWO_MONTHS_AGO.strftime("%Y-%m-%d")
-# try:
-#     VERIFY_SSL=bool(config.get('Auth', 'VERIFY_SSL'))
-# except Exception:
-#     VERIFY_SSL=True
 
-TO_EMAIL=config.get('Report', 'TO_EMAIL')
-FROM_EMAIL=config.get('Report', 'FROM_EMAIL')
+TO_EMAIL        = config.get('Report', 'TO_EMAIL')
+FROM_EMAIL      = config.get('Report', 'FROM_EMAIL')
 
 def percentage(part, whole):
+    """Get a Percentage in Float format"""
     return 100 * float(part)/float(whole)
 
+
 def get_change_metrics(l_month_qty, c_month_qty, total_qty=None):
+    """
+    Simple funciton to provide the quantitative change and percentage between
+    two numbers and an optional base number. If no basenumber is provided then
+    l_month_qty is used as the base
+    """
     num_change = c_month_qty - l_month_qty
 
     if total_qty is None:
@@ -100,6 +103,7 @@ def get_static_data():
 
 
 def get_gt_lt_50_metrics(data):
+    """Fuction for retrieving 50% type data for failures/successes"""
     gt_50_pct = 0
     lt_50_pct = 0
 
@@ -122,6 +126,7 @@ def get_gt_lt_50_metrics(data):
     return gt_50_pct, lt_50_pct
 
 def get_job_data():
+    """This is the meat of the script. Gets all the proper data and parses it"""
     current_month_all_data      = get_data('jobs/?started__gte=%s' % LAST_MONTH)
     last_month_all_data         = get_data('jobs/?started__gte=%s' % TWO_MONTHS_AGO)
 
@@ -168,12 +173,14 @@ def get_job_data():
 
 
 def get_duration_avg(data):
+    """Simple function to get duration averages"""
     duration_times  = [job['elapsed'] for job in data['results']]
     avg_duration    = sum(duration_times) / len(duration_times)
     return avg_duration
 
 
 def generate_csv(**kwargs):
+    """Generates a CSV file to the config defined path. It will append the latest report if the CSV already exists."""
     fieldnames=[
                 'Date', 'Ansible Tower Version', 'Ansible Core Version',
                 'Number of Hosts', 'License Limit', 'License Slots Remaining',
@@ -223,7 +230,8 @@ def generate_csv(**kwargs):
             try:
                 writer.writeheader()
             except AttributeError:
-                csvfile.write(','.join(fieldnames) + '\n')
+                if csvfile.Sniffer.has_header():
+                    csvfile.write(','.join(fieldnames) + '\n')
 
             writer.writerow(csv_dict)
 
@@ -234,6 +242,7 @@ def generate_csv(**kwargs):
 
 
 def send_email(**data):
+    """Sends an email report"""
     email_tmpl = """
 Ansible Tower Monthly Report
 Date: {date}
@@ -243,17 +252,17 @@ License Limit: {license_limit}
 Remaining License Slots: {remaining_slots}\n\n\n
 ### 30 Day Job Run Report ###
 Total Jobs Ran: {total_jobs}
->>> Change from previous month: {jobs_qty_chg} ({job_pct_chg})\n
+>>> Change from previous month: {jobs_qty_chg} ({job_pct_chg}%)\n
 Successful Job Runs: {success_jobs}
->>> Change from previous month: {success_qty_chg} ({success_pct_chg})\n
+>>> Change from previous month: {success_qty_chg} ({success_pct_chg}%)\n
 Failed Job Runs: {failed_jobs}
->>> Change from previous month: {failed_qty_chg} ({failed_pct_chg})
+>>> Change from previous month: {failed_qty_chg} ({failed_pct_chg}%)
 >>> Failures where at least 50% of hosts succeeded: {gt_50_qty}
->>>>>> Change from previous month: {gt_50_qty_chg} ({gt_50_pct_chg})\n
->>> Failures where more than 50% of hosts succeeded: {lt_50_qty}
->>>>>> Change from previous month: {lt_50_qty_chg} ({lt_50_pct_chg})\n
-Average Job Run Duration: {avg_duration}
->>> Change from previous month: {avg_duration_chg} ({avg_duration_pct_chg})\n
+>>>>>> Change from previous month: {gt_50_qty_chg} ({gt_50_pct_chg}%)\n
+>>> Failures where less than 50% of hosts succeeded: {lt_50_qty}
+>>>>>> Change from previous month: {lt_50_qty_chg} ({lt_50_pct_chg}%)\n
+Average Job Run Duration: {avg_duration} seconds
+>>> Change from previous month: {avg_duration_chg} ({avg_duration_pct_chg}%)\n
 
 """
     email_body = email_tmpl.format(**data)
@@ -267,6 +276,8 @@ Average Job Run Duration: {avg_duration}
     s.quit()
 
 def main():
+    """Main function that runs everything else"""
+
     tower_v, ansible_v, license_limit, host_count = get_static_data()
 
     current_month_job_count, job_qty_change, job_pct_change, current_success_count, current_failures_count,\
