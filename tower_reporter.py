@@ -219,7 +219,12 @@ def generate_csv(**kwargs):
     if not os.path.isfile(REPORT_CSV_PATH):
         with open(REPORT_CSV_PATH, 'wb') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
+
+            try:
+                writer.writeheader()
+            except AttributeError:
+                csvfile.write(','.join(fieldnames) + '\n')
+
             writer.writerow(csv_dict)
 
     else:
@@ -257,7 +262,7 @@ Average Job Run Duration: {avg_duration}
     msg['Subject'] = '[ANSIBLE_TOWER] Monthly Report'
     msg['From'] = FROM_EMAIL
     msg['To'] = TO_EMAIL
-    s = smtplib.SMTP('localhost', 1025)
+    s = smtplib.SMTP('localhost')
     s.sendmail(FROM_EMAIL, [TO_EMAIL], msg.as_string())
     s.quit()
 
