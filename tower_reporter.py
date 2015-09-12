@@ -120,15 +120,15 @@ def get_gt_lt_50_metrics(data):
             if percentage(succeeded_hosts, total_hosts) > 50:
                 gt_50_pct += 1
 
-            else:
+            elif percentage(failed_hosts, total_hosts) > 50:
                 lt_50_pct += 1
-
+    print gt_50_pct, lt_50_pct
     return gt_50_pct, lt_50_pct
 
 def get_job_data():
     """This is the meat of the script. Gets all the proper data and parses it"""
     current_month_all_data      = get_data('jobs/?started__gte=%s' % LAST_MONTH)
-    last_month_all_data         = get_data('jobs/?started__gte=%s' % TWO_MONTHS_AGO)
+    last_month_all_data         = get_data('jobs/?started__gte=%s;started__lte=%s' % (TWO_MONTHS_AGO, LAST_MONTH))
 
     current_month_job_count     = current_month_all_data['count']
     last_month_job_count        = last_month_all_data['count']
@@ -271,7 +271,7 @@ Average Job Run Duration: {avg_duration} seconds
     msg['Subject'] = '[ANSIBLE_TOWER] Monthly Report'
     msg['From'] = FROM_EMAIL
     msg['To'] = TO_EMAIL
-    s = smtplib.SMTP('localhost')
+    s = smtplib.SMTP('localhost', 1025)
     s.sendmail(FROM_EMAIL, [TO_EMAIL], msg.as_string())
     s.quit()
 
@@ -295,7 +295,7 @@ def main():
                    success_qty_chg=success_qty_change, success_pct_chg=success_pct_change,
                    failed_jobs=current_failures_count, failed_qty_chg=failure_qty_change,
                    failed_pct_chg=failure_pct_change, gt_50_qty=current_month_gt_50pct_success,
-                   gt_50_qty_chg=gt_50_pct_change, gt_50_pct_chg=gt_50_pct_change,
+                   gt_50_qty_chg=gt_50_qty_change, gt_50_pct_chg=gt_50_pct_change,
                    lt_50_qty=current_month_lt_50pct_success, lt_50_qty_chg=lt_50_qty_change, lt_50_pct_chg=lt_50_pct_change,
                    avg_duration=current_avg_duration, avg_duration_chg=duration_avg_change,
                    avg_duration_pct_chg=duration_pct_change)
