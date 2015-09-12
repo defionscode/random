@@ -4,66 +4,85 @@
 This script is to be leveraged by autosys in order to grab details from Ansible
 Tower and send a report via email.
 
-Metrics Gathered
-30 Days of Data
+### SAMPLE REPORT ###
+Ansible Tower Report
+Date: 2015-09-12
+Ansible Tower Version: 2.2.0
+Hosts Managed: 18
+License Limit: 10000
+Remaining License Slots: 9982
 
-Ansible Tower Version
-Ansible Core Version
-# Hosts in Inventory
-License Limit
-Average Execution Time Per Job (pct change)
-Number of Job Runs (pct change)
-Number of Successful Runs
-Failures
-Number of Total Failures (pct change)
-     Where greater than 50pct of hosts failed (pct change)
-     Where less than 50pct of hosts failed (pct change)
 
-Number of Scheduled Job Failures (pct change)
-     Where greater than 50pct of hosts failed (pct change)
-     Where less than 50pct of hosts failed (pct change)
 
-Number of Manual Job Failures (pct change)
-     Where greater than 50pct of hosts failed (pct change)
-     Where less than 50pct of hosts failed (pct change)
+### 5 Day Job Run Report ###
+Total Jobs Ran: 26
+>>> Change from previous 5 day range: 7 (36.84%)
+
+Successful Job Runs: 18
+>>> Change from previous 5 day range: 5 (19.23%)
+
+Failed Job Runs: 7
+>>> Change from previous 5 day range: 1 (3.85%)
+>>> Failures where at least 50% of hosts succeeded: 15
+    >>> Change from previous 5 day range: 6 (66.67%)
+
+>>> Failures where less than 50% of hosts succeeded: 5
+    >>> Change from previous 5 day range: 4 (400.0%)
+
+Average Job Run Duration: 64.14 seconds
+>>> Change from previous 5 day range: 34.22 seconds (114.37%)
 
 """
 
 import os, sys, json, datetime, ConfigParser, smtplib, tempfile, csv
 from email.mime.text import MIMEText
 
-import requests
+try:
+    import requests
+except ImportError:
+    sys.exit('You must install python-requests to use this. Try'
+             'pip install requests.')
 
 requests.packages.urllib3.disable_warnings()
 
-config=ConfigParser.ConfigParser()
+config = ConfigParser.ConfigParser()
 config.read('tower_reporter.ini')
 
-TOWER_ENDPOINT=config.get('Auth', 'TOWER_ENDPOINT')
+TOWER_ENDPOINT = config.get('Auth', 'TOWER_ENDPOINT')
 
 if TOWER_ENDPOINT.endswith('/'):
-    TOWER_ENDPOINT=TOWER_ENDPOINT + 'api/v1/'
+    TOWER_ENDPOINT = TOWER_ENDPOINT + 'api/v1/'
 else:
-    TOWER_ENDPOINT=TOWER_ENDPOINT + '/api/v1/'
+    TOWER_ENDPOINT = TOWER_ENDPOINT + '/api/v1/'
 
 TOWER_USER      = config.get('Auth', 'TOWER_USER')
 TOWER_PASS      = config.get('Auth', 'TOWER_PASS')
 REPORT_CSV_PATH = config.get('Report', 'REPORT_CSV_PATH')
 
-TODAY           = datetime.date.today()
-LAST_MONTH      = TODAY - datetime.timedelta(days=30)
-TWO_MONTHS_AGO  = LAST_MONTH - datetime.timedelta(days=30)
+if config.get('Report', 'REPORT_RANGE') is not None:
+    REPORT_RANGE = int(config.get('Report', 'REPORT_RANGE'))
+else:
+    REPORT_RANGE = 30
 
-TODAY           = TODAY.strftime("%Y-%m-%d")
-LAST_MONTH      = LAST_MONTH.strftime("%Y-%m-%d")
-TWO_MONTHS_AGO  = TWO_MONTHS_AGO.strftime("%Y-%m-%d")
+if config.get('Report', 'SMTP_PORT') is not None:
+    SMTP_PORT = int(config.get('Report', 'SMTP_PORT'))
+else:
+    SMTP_PORT = 25
 
-TO_EMAIL        = config.get('Report', 'TO_EMAIL')
-FROM_EMAIL      = config.get('Report', 'FROM_EMAIL')
+TODAY            = datetime.date.today()
+LAST_PERIOD      = TODAY - datetime.timedelta(days=REPORT_RANGE)
+TWO_PERIODS_AGO  = LAST_PERIOD - datetime.timedelta(days=REPORT_RANGE)
+
+TODAY            = TODAY.strftime("%Y-%m-%d")
+LAST_PERIOD      = LAST_PERIOD.strftime("%Y-%m-%d")
+TWO_PERIODS_AGO  = TWO_PERIODS_AGO.strftime("%Y-%m-%d")
+
+TO_EMAIL         = config.get('Report', 'TO_EMAIL')
+FROM_EMAIL       = config.get('Report', 'FROM_EMAIL')
 
 def percentage(part, whole):
     """Get a Percentage in Float format"""
-    return 100 * float(part)/float(whole)
+    return float(format(100 * float(part)/float(whole), '.2f'))
 
 
 def get_change_metrics(l_month_qty, c_month_qty, total_qty=None):
@@ -122,22 +141,21 @@ def get_gt_lt_50_metrics(data):
 
             elif percentage(failed_hosts, total_hosts) > 50:
                 lt_50_pct += 1
-    print gt_50_pct, lt_50_pct
     return gt_50_pct, lt_50_pct
 
 def get_job_data():
     """This is the meat of the script. Gets all the proper data and parses it"""
-    current_month_all_data      = get_data('jobs/?started__gte=%s' % LAST_MONTH)
-    last_month_all_data         = get_data('jobs/?started__gte=%s;started__lte=%s' % (TWO_MONTHS_AGO, LAST_MONTH))
+    current_month_all_data      = get_data('jobs/?started__gte=%s' % LAST_PERIOD)
+    last_month_all_data         = get_data('jobs/?started__gte=%s;started__lte=%s' % (TWO_PERIODS_AGO, LAST_PERIOD))
 
     current_month_job_count     = current_month_all_data['count']
     last_month_job_count        = last_month_all_data['count']
 
-    current_month_success_data  = get_data('jobs/?status=successful&started__gte=%s' % LAST_MONTH)
-    current_month_failed_data   = get_data('jobs/?status=failed&started__gte=%s' % LAST_MONTH)
+    current_month_success_data  = get_data('jobs/?status=successful&started__gte=%s' % LAST_PERIOD)
+    current_month_failed_data   = get_data('jobs/?status=failed&started__gte=%s' % LAST_PERIOD)
 
-    last_month_success_data     = get_data('jobs/?status=successful&started__gte=%s;started__lte=%s' % (TWO_MONTHS_AGO, LAST_MONTH))
-    last_month_failed_data      = get_data('jobs/?status=failed&started__gte=%s;started__lte=%s' % (TWO_MONTHS_AGO, LAST_MONTH))
+    last_month_success_data     = get_data('jobs/?status=successful&started__gte=%s;started__lte=%s' % (TWO_PERIODS_AGO, LAST_PERIOD))
+    last_month_failed_data      = get_data('jobs/?status=failed&started__gte=%s;started__lte=%s' % (TWO_PERIODS_AGO, LAST_PERIOD))
 
     current_failures_count      = current_month_failed_data['count']
     last_failures_count         = last_month_failed_data['count']
@@ -176,7 +194,7 @@ def get_duration_avg(data):
     """Simple function to get duration averages"""
     duration_times  = [job['elapsed'] for job in data['results']]
     avg_duration    = sum(duration_times) / len(duration_times)
-    return avg_duration
+    return float(format(avg_duration, '.2f'))
 
 
 def generate_csv(**kwargs):
@@ -244,34 +262,34 @@ def generate_csv(**kwargs):
 def send_email(**data):
     """Sends an email report"""
     email_tmpl = """
-Ansible Tower Monthly Report
+Ansible Tower Report
 Date: {date}
 Ansible Tower Version: {tower_version}
 Hosts Managed: {host_count}
 License Limit: {license_limit}
 Remaining License Slots: {remaining_slots}\n\n\n
-### 30 Day Job Run Report ###
+### {range} Day Job Run Report ###
 Total Jobs Ran: {total_jobs}
->>> Change from previous month: {jobs_qty_chg} ({job_pct_chg}%)\n
+>>> Change from previous {range} day range: {jobs_qty_chg} ({job_pct_chg}%)\n
 Successful Job Runs: {success_jobs}
->>> Change from previous month: {success_qty_chg} ({success_pct_chg}%)\n
+>>> Change from previous {range} day range: {success_qty_chg} ({success_pct_chg}%)\n
 Failed Job Runs: {failed_jobs}
->>> Change from previous month: {failed_qty_chg} ({failed_pct_chg}%)
+>>> Change from previous {range} day range: {failed_qty_chg} ({failed_pct_chg}%)
 >>> Failures where at least 50% of hosts succeeded: {gt_50_qty}
->>>>>> Change from previous month: {gt_50_qty_chg} ({gt_50_pct_chg}%)\n
+    >>> Change from previous {range} day range: {gt_50_qty_chg} ({gt_50_pct_chg}%)\n
 >>> Failures where less than 50% of hosts succeeded: {lt_50_qty}
->>>>>> Change from previous month: {lt_50_qty_chg} ({lt_50_pct_chg}%)\n
+    >>> Change from previous {range} day range: {lt_50_qty_chg} ({lt_50_pct_chg}%)\n
 Average Job Run Duration: {avg_duration} seconds
->>> Change from previous month: {avg_duration_chg} ({avg_duration_pct_chg}%)\n
+>>> Change from previous {range} day range: {avg_duration_chg} seconds ({avg_duration_pct_chg}%)\n
 
 """
-    email_body = email_tmpl.format(**data)
+    email_body = email_tmpl.format(range=REPORT_RANGE, **data)
 
     msg = MIMEText(email_body)
     msg['Subject'] = '[ANSIBLE_TOWER] Monthly Report'
     msg['From'] = FROM_EMAIL
     msg['To'] = TO_EMAIL
-    s = smtplib.SMTP('localhost', 1025)
+    s = smtplib.SMTP('localhost', SMTP_PORT)
     s.sendmail(FROM_EMAIL, [TO_EMAIL], msg.as_string())
     s.quit()
 
@@ -288,17 +306,30 @@ def main():
     duration_avg_change, duration_pct_change = get_job_data()
 
     results = dict(
-                   date=TODAY, tower_version=tower_v, core_version=ansible_v,
-                   license_limit=license_limit, host_count=host_count, remaining_slots=(license_limit-host_count),
-                   total_jobs=current_month_job_count, jobs_qty_chg=job_qty_change,
-                   job_pct_chg=job_pct_change, success_jobs=current_success_count,
-                   success_qty_chg=success_qty_change, success_pct_chg=success_pct_change,
-                   failed_jobs=current_failures_count, failed_qty_chg=failure_qty_change,
-                   failed_pct_chg=failure_pct_change, gt_50_qty=current_month_gt_50pct_success,
-                   gt_50_qty_chg=gt_50_qty_change, gt_50_pct_chg=gt_50_pct_change,
-                   lt_50_qty=current_month_lt_50pct_success, lt_50_qty_chg=lt_50_qty_change, lt_50_pct_chg=lt_50_pct_change,
-                   avg_duration=current_avg_duration, avg_duration_chg=duration_avg_change,
-                   avg_duration_pct_chg=duration_pct_change)
+                   date                   = TODAY,
+                   tower_version          = tower_v,
+                   core_version           = ansible_v,
+                   license_limit          = license_limit,
+                   host_count             = host_count,
+                   remaining_slots        = (license_limit - host_count),
+                   total_jobs             = current_month_job_count,
+                   jobs_qty_chg           = job_qty_change,
+                   job_pct_chg            = job_pct_change,
+                   success_jobs           = current_success_count,
+                   success_qty_chg        = success_qty_change,
+                   success_pct_chg        = success_pct_change,
+                   failed_jobs            = current_failures_count,
+                   failed_qty_chg         = failure_qty_change,
+                   failed_pct_chg         = failure_pct_change,
+                   gt_50_qty              = current_month_gt_50pct_success,
+                   gt_50_qty_chg          = gt_50_qty_change,
+                   gt_50_pct_chg          = gt_50_pct_change,
+                   lt_50_qty              = current_month_lt_50pct_success,
+                   lt_50_qty_chg          = lt_50_qty_change,
+                   lt_50_pct_chg          = lt_50_pct_change,
+                   avg_duration           = current_avg_duration,
+                   avg_duration_chg       = duration_avg_change,
+                   avg_duration_pct_chg   = duration_pct_change)
 
     generate_csv(**results)
     send_email(**results)
