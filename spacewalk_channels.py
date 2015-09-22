@@ -53,7 +53,7 @@ author: "Jonathan I. Davila (@defionscode) <jdavila@ansible.com>"
 
 EXAMPLES = '''
 - name: Spacewalk
- spacewalk_channels:
+  spacewalk_channels:
      endpoint: https://spacewalk.endpoint.com
      username: ansible
      password: password
