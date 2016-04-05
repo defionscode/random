@@ -21,29 +21,70 @@ Style Guide
 ### [Conventions](#conventions)
 
 #### [Line Breaks](#line_breaks)
-1. One line break between tasks
-1. Two line breaks between roles
+1. One line break between tasks, blocks, and roles
+1. Two line breaks between plays
 
-#### [Task Parameters](#params)
+#### [Play Directives](#play_params)
+1. Every play should be named. No exceptions.
+1. Play directives should be used in the following order
+  2. name
+  2. hosts
+  2. connection
+  2. port
+  2. accelerate
+  2. accelerate_port
+  2. accelerate_ipv6
+  2. gather_facts/gather_subset
+  2. remote_user
+  2. become
+  2. become_user
+  2. become_method
+  2. max_fail_percentage
+  2. ignore_errors
+  2. strategy
+  2. serial
+  2. vars
+  2. vars_files
+  2. vars_prompt
+  2. environment
+  2. run_once
+  2. pre_tasks
+  2. tasks/roles (note: using tasks & roles simultaneously is discouraged)
+  2. post_tasks
+  3. handlers
+  2. tags
+
+#### [Task Directives](#params)
 1. Every task should be named
-  2. Acceptable acception are include tasks where the name of the file being included is verbose enough to describe what is being included
-1. Task arguments should follow this order (* denotes required)
+  2. Exceptions are 
+    a. include tasks where the name of the file being included is verbose enough to describe what is being included
+    b. role invocation (as it doesnt work)
+    c. blocks (as it doesnt work)
+1. Task directives should follow this order (* denotes required)
   2. name*
+  2. delegate_to
+  2. delegate_facts
+  2. connection
   2. no_log
   2. always_run
+  2. run_once
   2. async
   2. poll
-  2. sudo 
+  2. become 
   2. remote_user
-  2. become/become_user/become_method or sudo/su_user
-  2. module + module arguments*
+  2. become/become_user/become_method
+  2. vars
+  2. module/action + module arguments*
+  2. args
   2. environment
-  2. loops
-  2. when/until
+  2. loops & loop_args
   2. retries
+  2. delay
+  2. when
   2. register
-  2. ignore_errors
+  2. ignore_errors/any_errors_fatal
   2. changed_when/failed_when
+  2. notify
   2. tags
 1. Tasks should be written out in strict YAML
 ```yaml
