@@ -1,0 +1,5 @@
+- name: Demo galaxy
+  hosts: "{{ target }}"
+  roles:
+    - role: silly_role
+      me: Someone Else
