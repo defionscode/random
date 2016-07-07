@@ -1,4 +1,4 @@
 - name: Demo galaxy
   hosts: "{{ target }}"
   roles:
-    - role: ntp 
+    - role: ntp_demo
