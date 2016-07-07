@@ -1,3 +1,3 @@
 - src: https://github.com/defionscode/ntp_demo.git
-  version: v0.09.1
+  version: v.09.1
   path: roles/ntp
