@@ -1,3 +1,0 @@
-- name: Print a message
-  debug:
-    msg: This worked for {{ me }}

@@ -1,1 +1,3 @@
-- src: https://github.com/defionscode/silly_role.git
+- src: https://github.com/defionscode/ntp_demo.git
+  version: v0.09
+  path: roles/ntp
