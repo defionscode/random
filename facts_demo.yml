@@ -4,3 +4,7 @@
     - name:
       debug:
         msg: "{{ hostvars[inventory_hostname] | to_nice_yaml }}"
+
+    - name:
+      debug:
+        msg: "{{ datacenter }}"
