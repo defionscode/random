@@ -1,5 +1,0 @@
-- name: Demo galaxy
-  hosts: "{{ target }}"
-  become: yes
-  roles:
-    - role: ntp_demo

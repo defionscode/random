@@ -1,0 +1,6 @@
+- name: Test vars
+  hosts: "{{ target }}"
+  tasks:
+    - name:
+      debug:
+        var: "{{ hostvars[inventory_hostname] }}"
