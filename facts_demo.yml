@@ -1,5 +1,5 @@
 - name: Test vars
-  hosts: "{{ target }}"
+  hosts: 54.174.243.240 
   tasks:
     - name:
       debug:
