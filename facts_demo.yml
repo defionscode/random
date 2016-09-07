@@ -3,4 +3,4 @@
   tasks:
     - name:
       debug:
-        msg: "{{ hostvars[inventory_hostname] }}"
+        msg: "{{ hostvars[inventory_hostname] | to_nice_yaml }}"
