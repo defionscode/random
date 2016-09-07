@@ -3,4 +3,4 @@
   tasks:
     - name:
       debug:
-        var: "{{ hostvars[inventory_hostname] }}"
+        msg: "{{ hostvars[inventory_hostname] }}"
